@@ -1,0 +1,18 @@
+# Node.js dependencies
+node_modules/
+
+# Build output (generated, not committed)
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/settings.json
+.idea/
+
+# Environment files (NEVER commit secrets!)
+.env
+.env.local
+.env.production

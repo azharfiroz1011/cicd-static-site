@@ -1,0 +1,18 @@
+/*
+ * HTMLHint configuration
+ * Docs: https://htmlhint.com/docs/user-guide/list-rules
+ *
+ * These rules enforce clean, semantic HTML across the project.
+ */
+{
+  "tagname-lowercase": true,
+  "attr-lowercase": true,
+  "attr-value-double-quotes": true,
+  "doctype-first": true,
+  "tag-pair": true,
+  "id-unique": true,
+  "src-not-empty": true,
+  "alt-require": true,
+  "title-require": true,
+  "spec-char-escape": false
+}

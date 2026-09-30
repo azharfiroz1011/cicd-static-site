@@ -1,0 +1,230 @@
+# =============================================================
+# GitHub Actions Workflow: CI/CD Pipeline for Static Website
+# =============================================================
+#
+# WHAT IS A GITHUB ACTIONS WORKFLOW?
+# ------------------------------------
+# A workflow is an automated process defined in a YAML file.
+# GitHub reads files inside `.github/workflows/` and runs them
+# automatically when specific events happen (like a git push).
+#
+# KEY CONCEPTS:
+#   Trigger  → The event that starts the pipeline (push, PR, etc.)
+#   Job      → A group of steps that run on the same machine
+#   Step     → A single action inside a job (run a command, use an Action)
+#   Action   → A reusable plugin from the GitHub Marketplace
+#   Runner   → The virtual machine GitHub spins up to run your job
+#   Secret   → Encrypted variables you set in GitHub Settings → Secrets
+#
+# =============================================================
+
+name: CI/CD — Build & Deploy to S3
+
+# ──────────────────────────────────────────────────────────────
+# TRIGGERS: When does this pipeline run?
+# ──────────────────────────────────────────────────────────────
+on:
+  # Run on every push to the main branch (triggers full CI + deploy)
+  push:
+    branches:
+      - main
+
+  # Run CI (lint + test) on every pull request targeting main
+  # This lets you catch bugs BEFORE merging code
+  pull_request:
+    branches:
+      - main
+
+  # Allow manually triggering this workflow from the GitHub UI
+  workflow_dispatch:
+
+# ──────────────────────────────────────────────────────────────
+# ENVIRONMENT VARIABLES
+# Shared across all jobs. Centralises configuration.
+# ──────────────────────────────────────────────────────────────
+env:
+  NODE_VERSION: '20'        # Node.js version used in all jobs
+  BUILD_OUTPUT_DIR: dist    # The folder our build script outputs
+
+# ──────────────────────────────────────────────────────────────
+# JOBS
+# ──────────────────────────────────────────────────────────────
+jobs:
+
+  # ============================================================
+  # JOB 1: LINT
+  # Purpose: Check that our HTML follows quality rules.
+  # Why? Catches typos, missing alt tags, unclosed tags, etc.
+  #      This is the FIRST gate — fast and cheap to run.
+  # ============================================================
+  lint:
+    name: 🔍 Lint
+    runs-on: ubuntu-latest   # GitHub spins up a fresh Ubuntu VM for this job
+
+    steps:
+      # Step 1: Checkout — Download the repository code onto the runner
+      # This MUST be the first step in almost every job.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js with the version we specified above
+      # 'cache: npm' automatically caches node_modules between runs (faster!)
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # Step 3: Install project dependencies (htmlhint, jest, etc.)
+      # --ci flag is safer for CI: it uses package-lock.json exactly
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run the linter
+      # HTMLHint checks our HTML against rules defined in .htmlhintrc
+      - name: Run HTML linter
+        run: npm run lint
+
+
+  # ============================================================
+  # JOB 2: TEST
+  # Purpose: Run automated tests to verify the code works correctly.
+  # Why? Tests catch bugs that linting can't — logic errors, broken
+  #      links, missing files, etc.
+  # Note: 'needs: lint' means this job only starts if lint PASSES.
+  # ============================================================
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    needs: lint   # ← Dependency: only run after lint job succeeds
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Run Jest test suite
+      # --passWithNoTests ensures the job succeeds even if no test files exist yet
+      - name: Run tests
+        run: npm test
+
+
+  # ============================================================
+  # JOB 3: BUILD
+  # Purpose: Compile/bundle the source code into a deployable artifact.
+  # Why? We never deploy raw source. The build step optimises files
+  #      and produces a clean `dist/` folder ready for the server.
+  # ============================================================
+  build:
+    name: 📦 Build
+    runs-on: ubuntu-latest
+    needs: test   # ← Only build if tests pass
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      # Upload the dist/ folder as a GitHub Artifact.
+      # WHY? Jobs run on separate VMs and don't share a filesystem.
+      # We "upload" the build output so the deploy job can "download" it.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-site-dist
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+          retention-days: 7   # Keep the artifact for 7 days
+
+
+  # ============================================================
+  # JOB 4: DEPLOY
+  # Purpose: Upload the build output to AWS S3.
+  # Why? S3 can serve static files as a website at very low cost.
+  #
+  # IMPORTANT: This job only runs on pushes to 'main' — NOT on PRs.
+  # We don't want to accidentally deploy unreviewed code!
+  # ============================================================
+  deploy:
+    name: ☁️ Deploy to S3
+    runs-on: ubuntu-latest
+    needs: build   # ← Only deploy if build succeeds
+
+    # 'if' condition: only deploy when pushing to main (not on PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    # Declare this job as a 'production' deployment
+    # GitHub tracks this and shows it in the repository's Environments tab
+    environment:
+      name: production
+      url: http://${{ secrets.S3_BUCKET_NAME }}.s3-website.${{ secrets.AWS_REGION }}.amazonaws.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download the dist/ folder that the build job uploaded
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: static-site-dist
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+
+      # Configure AWS credentials using GitHub Secrets.
+      # NEVER hardcode credentials in your workflow YAML!
+      # Set these in: GitHub → Settings → Secrets and variables → Actions
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Sync the dist/ folder to S3.
+      # --delete removes files from S3 that no longer exist locally (clean deploy)
+      # --cache-control sets browser caching headers for better performance
+      - name: Deploy to S3 bucket
+        run: |
+          aws s3 sync ${{ env.BUILD_OUTPUT_DIR }}/ s3://${{ secrets.S3_BUCKET_NAME }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html"
+
+          # HTML files should NOT be cached long-term so users always get latest
+          aws s3 sync ${{ env.BUILD_OUTPUT_DIR }}/ s3://${{ secrets.S3_BUCKET_NAME }}/ \
+            --delete \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --include "*.html"
+
+      # ── OPTIONAL: CloudFront Cache Invalidation ──────────────
+      # If you put CloudFront in front of S3 (recommended for HTTPS + CDN),
+      # uncomment the block below and add CLOUDFRONT_DISTRIBUTION_ID to Secrets.
+      #
+      # - name: Invalidate CloudFront cache
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #       --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+      #       --paths "/*"
+
+      - name: ✅ Deployment complete
+        run: |
+          echo "🎉 Site deployed successfully!"
+          echo "🌐 URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website.${{ secrets.AWS_REGION }}.amazonaws.com"

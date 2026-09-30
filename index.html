@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="My Static Website — deployed via GitHub Actions CI/CD to AWS S3" />
+  <title>My CI/CD Static Site</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      <span class="badge">🚀 Deployed via GitHub Actions</span>
+      <h1>CI/CD Pipeline</h1>
+      <p class="subtitle">A static website automatically built &amp; deployed to AWS S3 using GitHub Actions.</p>
+      <a href="https://github.com" class="btn" target="_blank" rel="noopener">View on GitHub</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="pipeline-section">
+      <h2>How Our Pipeline Works</h2>
+      <div class="stages">
+        <div class="stage">
+          <div class="stage-icon">🔍</div>
+          <h3>1. Lint</h3>
+          <p>Checks code style and formatting rules so the team writes consistent, clean code.</p>
+        </div>
+        <div class="stage-arrow">→</div>
+        <div class="stage">
+          <div class="stage-icon">🧪</div>
+          <h3>2. Test</h3>
+          <p>Runs automated tests to catch bugs early before code reaches production.</p>
+        </div>
+        <div class="stage-arrow">→</div>
+        <div class="stage">
+          <div class="stage-icon">📦</div>
+          <h3>3. Build</h3>
+          <p>Bundles and optimises all assets into a production-ready <code>dist/</code> folder.</p>
+        </div>
+        <div class="stage-arrow">→</div>
+        <div class="stage">
+          <div class="stage-icon">☁️</div>
+          <h3>4. Deploy</h3>
+          <p>Uploads the <code>dist/</code> folder to an AWS S3 bucket and serves it as a website.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-section">
+      <div class="info-card">
+        <h3>🌿 Branch Strategy</h3>
+        <ul>
+          <li><strong>main</strong> — production deploys trigger here</li>
+          <li><strong>develop</strong> — CI runs (lint + test) on every push</li>
+          <li><strong>feature/*</strong> — CI runs on pull requests</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>🔐 Secrets Used</h3>
+        <ul>
+          <li><code>AWS_ACCESS_KEY_ID</code></li>
+          <li><code>AWS_SECRET_ACCESS_KEY</code></li>
+          <li><code>AWS_REGION</code></li>
+          <li><code>S3_BUCKET_NAME</code></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built with ❤️ for learning DevOps &amp; CI/CD</p>
+  </footer>
+</body>
+</html>
