@@ -72,6 +72,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
 
       # Step 3: Install project dependencies (htmlhint, jest, etc.)
       # --ci flag is safer for CI: it uses package-lock.json exactly
